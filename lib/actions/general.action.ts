@@ -38,3 +38,4 @@ export async function getInterviewById(id:string): Promise<Interview | null> {
     .get();
 
     return interview.data() as Interview | null;
+}
