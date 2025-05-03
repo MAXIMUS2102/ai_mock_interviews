@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation';
 import { set } from 'react-hook-form';
 import { error } from 'console';
 import { start } from "repl";
+import { interviewer } from "@/constants";
 
 enum CallStatus {
     INACTIVE = 'INACTIVE',
@@ -20,7 +21,7 @@ interface savedMessage {
     content: string;
 }
 
-const Agent = ({userName, userId, type}: AgentProps) => {
+const Agent = ({userName, userId, type, interviewId, questions}: AgentProps) => {
 
     const router = useRouter();
     const [isSpeaking, setIsSpeaking] = useState(false);
@@ -41,7 +42,19 @@ const Agent = ({userName, userId, type}: AgentProps) => {
         const onSpeechStart = () => setIsSpeaking(true);
         const onSpeechEnd = () => setIsSpeaking(false);
 
-        const onError = (error:Error) => console.log('Error', error);
+        // const onError = (error:Error) => console.log('Error', error);
+        const onError = (error: any) => {
+            console.error('VAPI ERROR (raw):', error);
+            if (error instanceof Error) {
+                console.error('VAPI ERROR (details):', error.message, error.stack);
+            } else {
+                try {
+                    console.error('VAPI ERROR (JSON):', JSON.stringify(error, null, 2));
+                } catch (e) {
+                    console.error('VAPI ERROR (string fallback):', String(error));
+                }
+            }
+        };
 
         vapi.on('call-start', onCallStart);
         vapi.on('call-end', onCallEnd);
@@ -61,19 +74,56 @@ const Agent = ({userName, userId, type}: AgentProps) => {
         }
     },[])
 
+    const handleGenerateFeedback = async (messages: savedMessage[]) => {
+        console.log('Generate feedback here.');
+
+        //To Do: Create a server action that generates feedback
+        const { success, id } = {
+            success: true,
+            id:'feedback-id'
+        }
+
+        if(success && id){
+            router.push(`/interview/${interviewId}/feedback`);
+        } else {
+            console.log('Error saving feedback');
+            router.push('/');
+        }
+    }
     useEffect (() => {
-        if(callStatus === CallStatus.FINISHED) router.push('/');
+        if(callStatus === CallStatus.FINISHED){
+           if(type === 'generate'){
+            router.push('/')
+           } else{
+            handleGenerateFeedback(messages);
+           }
+        }
+        
     },[messages, callStatus, type, userId])
 
     const handleCall = async () => {
         setCallStatus(CallStatus.CONNECTING);
 
-        await vapi.start(process.env.NEXT_PUBLIC_VAPI_WORKFLOW_ID!, {
-           variableValues: {
-            username: userName,
-            userid: userId,
-           } 
-        })
+        if(type === 'generate'){
+            
+            await vapi.start(process.env.NEXT_PUBLIC_VAPI_WORKFLOW_ID!, {
+               variableValues: {
+                username: userName,
+                userid: userId,
+               } 
+            })
+        } else {
+            let formattedQuestions = '';
+            if(questions) {
+                formattedQuestions = questions.map((question) => `- ${question}`).join('\n');
+            }
+            await vapi.start(interviewer, {
+                variableValues: {
+                    questions: formattedQuestions
+                }
+            })
+        }
+
     }
 
     const handleDisconnect = async () => {
@@ -83,16 +133,6 @@ const Agent = ({userName, userId, type}: AgentProps) => {
 
     const latestMessage = messages[messages.length-1]?.content;
     const isCallInactiveOrFinished = callStatus === CallStatus.INACTIVE || callStatus === CallStatus.FINISHED;
-
-//   const callStatus = callStatus.FINISHED;  
-//   const isSpeaking = true;
-//   const messages = [
-//     'Whats your name?',
-//     'My name is John Doe, nice to meet you.'
-//   ];
-//   const lastMessage = messages[messages.length-1];
-
-//   const [currentStatus, setCurrentStatus] = React.useState<callStatus>(callStatus.FINISHED);
 
   
   return (
