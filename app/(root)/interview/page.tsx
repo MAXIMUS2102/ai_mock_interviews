@@ -1,5 +1,5 @@
 import Agent from '@/components/Agent'
-import Image from 'next/image'
+// import Image from 'next/image'
 import { getCurrentUser } from '@/lib/actions/auth.action'
 
 const page = async () => {
